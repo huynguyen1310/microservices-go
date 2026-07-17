@@ -21,13 +21,14 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /trip/preview", enableCORS(handleTripPreview))
-	mux.HandleFunc("/ws/drivers", handleDriversWebsocket)
-	mux.HandleFunc("/ws/riders", handleRidersWebsocket)
+	mux.HandleFunc("POST /trip/preview", handleTripPreview)
+	mux.HandleFunc("POST /trip/start", handleTripStart)
+	mux.HandleFunc("GET /ws/drivers", handleDriversWebsocket)
+	mux.HandleFunc("GET /ws/riders", handleRidersWebsocket)
 
 	server := &http.Server{
 		Addr:    httpAddr,
-		Handler: mux,
+		Handler: enableCORS(mux.ServeHTTP),
 	}
 
 	serverError := make(chan error, 1)

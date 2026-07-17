@@ -107,27 +107,26 @@ func (s *Service) estimateFareRoute(f *domain.RideFareModel, route *tripTypes.Os
 	}
 }
 
-func (s *Service) GetAndValidateFare(ctx context.Context, fareID, id string, route *tripTypes.OsrmApiResponse) (*domain.RideFareModel, error) {
-	func (s *Service) GetAndValidateFare(ctx context.Context, fareID, userID string, route *tripTypes.OsrmApiResponse) (*domain.RideFareModel, error) {
-		fare, err := s.repo.GetRideFareById(ctx, fareID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get ride fare: %w", err)
-		}
-
-		if fare == nil {
-			return nil, fmt.Errorf("fare does not exist")
-		}
-
-		if fare.UserID != userID {
-			return nil, fmt.Errorf("fare does not belong to user")
-		}
-
-		if fare.Route == nil {
-			fare.Route = route
-		}
-
-		return fare, nil
+func (s *Service) GetAndValidateFare(ctx context.Context, fareID, userID string, route *tripTypes.OsrmApiResponse) (*domain.RideFareModel, error) {
+	fare, err := s.repo.GetRideFareById(ctx, fareID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ride fare: %w", err)
 	}
+
+	if fare == nil {
+		return nil, fmt.Errorf("fare does not exist")
+	}
+
+	if fare.UserID != userID {
+		return nil, fmt.Errorf("fare does not belong to user")
+	}
+
+	if fare.Route == nil {
+		fare.Route = route
+	}
+
+	return fare, nil
+}
 
 func getBaseFares() []*domain.RideFareModel {
 	return []*domain.RideFareModel{
