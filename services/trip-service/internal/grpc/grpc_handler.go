@@ -44,8 +44,15 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, req *pb.PreviewTripReques
 		return nil, status.Errorf(codes.Internal, "internal server error: %v", err)
 	}
 
+	estimatedFares := h.service.EstimatePackagePriceWithRoute(t)
+	fares, err := h.service.GenerateTripFare(ctx, estimatedFares, req.GetUserID())
+	if err != nil {
+		log.Println(err)
+		return nil, status.Errorf(codes.Internal, "Failed to generate trip fare: %v", err)
+	}
+
 	return &pb.PreviewTripResponse{
 		Route:     t.ToProto(),
-		RideFares: []*pb.RideFares{},
+		RideFares: domain.ToRideFaresProto(fares),
 	}, nil
 }

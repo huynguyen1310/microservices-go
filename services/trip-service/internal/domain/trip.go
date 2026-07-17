@@ -18,9 +18,12 @@ type TripModel struct {
 
 type TripRepository interface {
 	CreateTrip(ctx context.Context, trip *TripModel) (*TripModel, error)
+	SaveRideFare(ctx context.Context, fare *RideFareModel) error
 }
 
 type TripService interface {
 	CreateTrip(ctx context.Context, fare *RideFareModel) (*TripModel, error)
 	GetRoute(ctx context.Context, pickup, destination *types.Coordinate) (*tripType.OsrmApiResponse, error)
+	EstimatePackagePriceWithRoute(route *tripType.OsrmApiResponse) []*RideFareModel
+	GenerateTripFare(ctx context.Context, fare []*RideFareModel, userID string) ([]*RideFareModel, error)
 }
