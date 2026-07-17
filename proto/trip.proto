@@ -6,6 +6,7 @@ option go_package = "shared/proto/trip;trip";
 
 service TripService {
   rpc PreviewTrip(PreviewTripRequest) returns (PreviewTripResponse);
+  rpc CreateTrip(CreateTripRequest) returns (CreateTripResponse);
 }
 
 message PreviewTripRequest {
@@ -17,7 +18,7 @@ message PreviewTripRequest {
 message PreviewTripResponse {
   string tripID = 1;
   Route route = 2;
-  repeated RideFares rideFares = 3;
+  repeated RideFare rideFares = 3;
 }
 
 message Coordinate {
@@ -35,9 +36,36 @@ message Route {
   double duration = 3;
 }
 
-message RideFares {
+message RideFare {
   string id = 1;
   string userID = 2;
   string packageSlug = 3;
   double totalPriceInCents = 4;
+}
+
+message CreateTripRequest {
+  string rideFareID = 1;
+  string userID = 2;
+}
+
+message CreateTripResponse {
+  string tripID = 1;
+  Trip trip = 2;
+}
+
+message Trip {
+  string id = 1;
+  RideFare selectedFare = 2;
+  Route route = 3;
+  string status = 4;
+  string userID = 5;
+  TripDriver driver = 6;
+}
+
+// Static driver object that is used to store the driver information
+message TripDriver {
+  string id = 1;
+  string name = 2;
+  string profilePicture = 3;
+  string carPlate = 4;
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"ride-sharing/services/trip-service/internal/domain"
 	tripTypes "ride-sharing/services/trip-service/pkg/types"
+	"ride-sharing/shared/proto/trip"
 	"ride-sharing/shared/types"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -27,6 +28,7 @@ func (s *Service) CreateTrip(ctx context.Context, fare *domain.RideFareModel) (*
 		UserID:   fare.UserID,
 		Status:   "pending",
 		RideFare: fare,
+		Driver:   &trip.TripDriver{},
 	}
 
 	return s.repo.CreateTrip(ctx, trip)
@@ -65,7 +67,7 @@ func (s *Service) EstimatePackagePriceWithRoute(route *tripTypes.OsrmApiResponse
 	return estimateFares
 }
 
-func (s *Service) GenerateTripFare(ctx context.Context, rideFares []*domain.RideFareModel, userID string) ([]*domain.RideFareModel, error) {
+func (s *Service) GenerateTripFare(ctx context.Context, rideFares []*domain.RideFareModel, userID string, route *tripTypes.OsrmApiResponse) ([]*domain.RideFareModel, error) {
 	fares := make([]*domain.RideFareModel, len(rideFares))
 
 	for i, f := range rideFares {
@@ -76,6 +78,7 @@ func (s *Service) GenerateTripFare(ctx context.Context, rideFares []*domain.Ride
 			ID:                id,
 			TotalPriceInCents: f.TotalPriceInCents,
 			PackageSlug:       f.PackageSlug,
+			Route:             route,
 		}
 
 		if err := s.repo.SaveRideFare(ctx, fare); err != nil {
@@ -103,6 +106,28 @@ func (s *Service) estimateFareRoute(f *domain.RideFareModel, route *tripTypes.Os
 		TotalPriceInCents: totalFare,
 	}
 }
+
+func (s *Service) GetAndValidateFare(ctx context.Context, fareID, id string, route *tripTypes.OsrmApiResponse) (*domain.RideFareModel, error) {
+	func (s *Service) GetAndValidateFare(ctx context.Context, fareID, userID string, route *tripTypes.OsrmApiResponse) (*domain.RideFareModel, error) {
+		fare, err := s.repo.GetRideFareById(ctx, fareID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get ride fare: %w", err)
+		}
+
+		if fare == nil {
+			return nil, fmt.Errorf("fare does not exist")
+		}
+
+		if fare.UserID != userID {
+			return nil, fmt.Errorf("fare does not belong to user")
+		}
+
+		if fare.Route == nil {
+			fare.Route = route
+		}
+
+		return fare, nil
+	}
 
 func getBaseFares() []*domain.RideFareModel {
 	return []*domain.RideFareModel{

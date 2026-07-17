@@ -3,6 +3,8 @@ package domain
 import (
 	pb "ride-sharing/shared/proto/trip"
 
+	tripTypes "ride-sharing/services/trip-service/pkg/types"
+
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -11,10 +13,11 @@ type RideFareModel struct {
 	UserID            string
 	PackageSlug       string
 	TotalPriceInCents float64
+	Route             *tripTypes.OsrmApiResponse
 }
 
-func (r *RideFareModel) ToProto() *pb.RideFares {
-	return &pb.RideFares{
+func (r *RideFareModel) ToProto() *pb.RideFare {
+	return &pb.RideFare{
 		Id:                r.ID.Hex(),
 		UserID:            r.UserID,
 		PackageSlug:       r.PackageSlug,
@@ -22,8 +25,8 @@ func (r *RideFareModel) ToProto() *pb.RideFares {
 	}
 }
 
-func ToRideFaresProto(fares []*RideFareModel) []*pb.RideFares {
-	var protoFares []*pb.RideFares
+func ToRideFaresProto(fares []*RideFareModel) []*pb.RideFare {
+	var protoFares []*pb.RideFare
 	for _, fare := range fares {
 		protoFares = append(protoFares, fare.ToProto())
 	}
