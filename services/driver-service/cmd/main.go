@@ -48,7 +48,7 @@ func main() {
 	grpcServer := grpcserver.NewServer()
 	grpc.NewGrpcHandler(grpcServer, svc)
 
-	consumer := events.NewTripConsumer(rabbitmq)
+	consumer := events.NewTripConsumer(rabbitmq, svc)
 
 	go func() {
 		if err := consumer.Listen(); err != nil {
