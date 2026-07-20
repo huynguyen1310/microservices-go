@@ -1,32 +1,32 @@
-package events
+package main
 
 import (
 	"context"
 	"encoding/json"
 	"log"
-	"ride-sharing/services/driver-service/internal/service"
 	"ride-sharing/shared/contracts"
 	"ride-sharing/shared/messaging"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rabbitmq/amqp091-go"
 )
 
-type TripConsumer struct {
-	rabbitMQ *messaging.RabbitMQ
-	service  *service.Service
+type tripConsumer struct {
+	rabbitmq *messaging.RabbitMQ
+	service  *Service
 }
 
-func NewTripConsumer(rabbitMQ *messaging.RabbitMQ, service *service.Service) *TripConsumer {
-	return &TripConsumer{
-		rabbitMQ: rabbitMQ,
+func NewTripConsumer(rabbitmq *messaging.RabbitMQ, service *Service) *tripConsumer {
+	return &tripConsumer{
+		rabbitmq: rabbitmq,
 		service:  service,
 	}
 }
 
-func (tc *TripConsumer) Listen() error {
-	return tc.rabbitMQ.ConsumeMessages(messaging.FindAvailableDriversQueue, func(ctx context.Context, msg amqp.Delivery) error {
+func (c *tripConsumer) Listen() error {
+	return c.rabbitmq.ConsumeMessages(messaging.FindAvailableDriversQueue, func(ctx context.Context, msg amqp091.Delivery) error {
 		var tripEvent contracts.AmqpMessage
 		if err := json.Unmarshal(msg.Body, &tripEvent); err != nil {
+			log.Printf("Failed to unmarshal message: %v", err)
 			return err
 		}
 
@@ -36,16 +36,11 @@ func (tc *TripConsumer) Listen() error {
 			return err
 		}
 
-		tripJSON, err := json.Marshal(payload.Trip)
-		if err != nil {
-			log.Printf("failed to marshal trip: %v", err)
-			return err
-		}
-		log.Printf("driver received trip event for user: %s, trip: %s", tripEvent.OwnerID, string(tripJSON))
+		log.Printf("driver received message: %+v", payload)
 
 		switch msg.RoutingKey {
 		case contracts.TripEventCreated, contracts.TripEventDriverNotInterested:
-			return tc.handleFindAndNotifyDrivers(ctx, payload)
+			return c.handleFindAndNotifyDrivers(ctx, payload)
 		}
 
 		log.Printf("unknown trip event: %+v", payload)
@@ -54,14 +49,14 @@ func (tc *TripConsumer) Listen() error {
 	})
 }
 
-func (tc *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload messaging.TripEvent) error {
-	suitableIDs := tc.service.FindAvailableDrivers(payload.Trip.SelectedFare.PackageSlug)
+func (c *tripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload messaging.TripEvent) error {
+	suitableIDs := c.service.FindAvailableDrivers(payload.Trip.SelectedFare.PackageSlug)
 
 	log.Printf("Found suitable drivers %v", len(suitableIDs))
 
 	if len(suitableIDs) == 0 {
 		// Notify the driver that no drivers are available
-		if err := tc.rabbitMQ.PublishMessage(ctx, contracts.TripEventNoDriversFound, contracts.AmqpMessage{
+		if err := c.rabbitmq.PublishMessage(ctx, contracts.TripEventNoDriversFound, contracts.AmqpMessage{
 			OwnerID: payload.Trip.UserID,
 		}); err != nil {
 			log.Printf("Failed to publish message to exchange: %v", err)
@@ -79,7 +74,7 @@ func (tc *TripConsumer) handleFindAndNotifyDrivers(ctx context.Context, payload 
 	}
 
 	// Notify the driver about a potential trip
-	if err := tc.rabbitMQ.PublishMessage(ctx, contracts.DriverCmdTripRequest, contracts.AmqpMessage{
+	if err := c.rabbitmq.PublishMessage(ctx, contracts.DriverCmdTripRequest, contracts.AmqpMessage{
 		OwnerID: suitableDriverID,
 		Data:    marshalledEvent,
 	}); err != nil {

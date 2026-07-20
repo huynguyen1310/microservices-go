@@ -6,9 +6,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"ride-sharing/services/driver-service/internal/infrastructure/events"
-	"ride-sharing/services/driver-service/internal/infrastructure/grpc"
-	"ride-sharing/services/driver-service/internal/service"
 	"ride-sharing/shared/env"
 	"ride-sharing/shared/messaging"
 	"syscall"
@@ -19,7 +16,8 @@ import (
 var GrpcAddr = ":9092"
 
 func main() {
-	rabbitmqURL := env.GetString("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -35,24 +33,25 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	rabbitmq, err := messaging.NewRabbitMQ(rabbitmqURL)
+	svc := NewService()
+
+	// RabbitMQ connection
+	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
+		log.Fatal(err)
 	}
 	defer rabbitmq.Close()
-	log.Println("Connected to RabbitMQ")
 
-	svc := service.NewService()
+	log.Println("Starting RabbitMQ connection")
 
 	// Starting the gRPC server
 	grpcServer := grpcserver.NewServer()
-	grpc.NewGrpcHandler(grpcServer, svc)
+	NewGrpcHandler(grpcServer, svc)
 
-	consumer := events.NewTripConsumer(rabbitmq, svc)
-
+	consumer := NewTripConsumer(rabbitmq, svc)
 	go func() {
 		if err := consumer.Listen(); err != nil {
-			log.Fatalf("failed to listen: %v", err)
+			log.Fatalf("Failed to listen to the message: %v", err)
 		}
 	}()
 
