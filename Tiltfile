@@ -4,7 +4,7 @@ load('ext://restart_process', 'docker_build_with_restart')
 ### K8s Config ###
 
 # Uncomment to use secrets
-# k8s_yaml('./infra/development/k8s/secrets.yaml')
+k8s_yaml('./infra/development/k8s/secrets.yaml')
 
 k8s_yaml('./infra/development/k8s/app-config.yaml')
 
@@ -38,7 +38,7 @@ docker_build_with_restart(
 
 k8s_yaml('./infra/development/k8s/api-gateway-deployment.yaml')
 k8s_resource('api-gateway', port_forwards=8081,
-             resource_deps=['api-gateway-compile'], labels="services")
+             resource_deps=['api-gateway-compile', 'rabbitmq'], labels="services")
 ### End of API Gateway ###
 ### Trip Service ###
 
@@ -67,7 +67,7 @@ docker_build_with_restart(
  )
 
 k8s_yaml('./infra/development/k8s/trip-service-deployment.yaml')
-k8s_resource('trip-service', resource_deps=['trip-service-compile'], labels="services")
+k8s_resource('trip-service', resource_deps=['trip-service-compile', 'rabbitmq'], labels="services")
 
 ### End of Trip Service ###
 ### Web Frontend ###
@@ -109,6 +109,11 @@ docker_build_with_restart(
  )
 
 k8s_yaml('./infra/development/k8s/driver-service-deployment.yaml')
-k8s_resource('driver-service', resource_deps=['driver-service-compile'], labels="services")
+k8s_resource('driver-service', resource_deps=['driver-service-compile', 'rabbitmq'], labels="services")
 
 ### End of Driver Service ###
+
+### RabbitMQ ###
+k8s_yaml('./infra/development/k8s/rabbitmq-deployment.yaml')
+k8s_resource('rabbitmq', port_forwards=['5672', '15672'], labels='tooling')
+### End RabbitMQ ###

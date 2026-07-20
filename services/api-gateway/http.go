@@ -86,7 +86,7 @@ func handleTripStart(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok {
-			writeJSON(w, int(st.Code()), st.Message())
+			writeJSON(w, http.StatusInternalServerError, st.Message())
 		} else {
 			log.Printf("Failed to create trip: %v", err)
 			writeJSON(w, http.StatusInternalServerError, "failed to create trip")
