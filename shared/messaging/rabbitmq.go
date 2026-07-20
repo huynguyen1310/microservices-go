@@ -2,10 +2,16 @@ package messaging
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"ride-sharing/shared/contracts"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+const (
+	TripExchange = "trip"
 )
 
 type RabbitMQ struct {
@@ -36,19 +42,59 @@ func NewRabbitMQ(url string) (*RabbitMQ, error) {
 }
 
 func (r *RabbitMQ) setupExchangesAndQueues() error {
-	_, err := r.Channel.QueueDeclare(
-		"hello", // name
-		true,    // durable
-		false,   // delete when unused
-		false,   // exclusive
-		false,   // no-wait
-		nil,     // arguments
+	err := r.Channel.ExchangeDeclare(
+		TripExchange, // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-delete
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare exchange: %s %v", TripExchange, err)
+	}
+
+	if err := r.declareAndBindQueue(
+		"find_available_drivers",
+		[]string{
+			contracts.TripEventCreated, contracts.TripEventDriverNotInterested,
+		},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *RabbitMQ) declareAndBindQueue(queueName string, messageType []string, exchange string) error {
+	q, err := r.Channel.QueueDeclare(
+		queueName, // name
+		true,      // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	for _, msg := range messageType {
+		if err := r.Channel.QueueBind(
+			q.Name,
+			msg,
+			exchange,
+			false,
+			nil,
+		); err != nil {
+			return fmt.Errorf("failed to bind queue to %s %v", queueName, err)
+		}
+	}
+
 	return nil
+
 }
 
 func (r *RabbitMQ) Close() error {
@@ -63,15 +109,21 @@ func (r *RabbitMQ) Close() error {
 	return nil
 }
 
-func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, message string) error {
-	err := r.Channel.PublishWithContext(ctx,
-		"",         // exchange
-		routingKey, // routing key
-		false,      // mandatory
-		false,      // immediate
+func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, message contracts.AmqpMessage) error {
+	log.Printf("Publishing message with routing key %s", routingKey)
+	jsonMess, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %s", err)
+	}
+
+	err = r.Channel.PublishWithContext(ctx,
+		TripExchange, // exchange
+		routingKey,   // routing key
+		false,        // mandatory
+		false,        // immediate
 		amqp.Publishing{
 			ContentType:  "text/plain",
-			Body:         []byte(message),
+			Body:         jsonMess,
 			DeliveryMode: amqp.Persistent,
 		})
 	if err != nil {

@@ -31,3 +31,14 @@ type TripService interface {
 	GenerateTripFare(ctx context.Context, fare []*RideFareModel, userID string, route *tripType.OsrmApiResponse) ([]*RideFareModel, error)
 	GetAndValidateFare(ctx context.Context, fareID, userID string, route *tripType.OsrmApiResponse) (*RideFareModel, error)
 }
+
+func (t *TripModel) ToProto() *pb.Trip {
+	return &pb.Trip{
+		Id:           t.ID.Hex(),
+		UserID:       t.UserID,
+		SelectedFare: t.RideFare.ToProto(),
+		Status:       t.Status,
+		Driver:       t.Driver,
+		Route:        t.RideFare.Route.ToProto(),
+	}
+}
