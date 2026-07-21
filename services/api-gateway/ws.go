@@ -3,22 +3,20 @@ package main
 import (
 	"log"
 	"net/http"
+	"ride-sharing/services/api-gateway/grpc_clients"
 	"ride-sharing/shared/contracts"
-	"ride-sharing/shared/util"
-
-	"github.com/gorilla/websocket"
+	"ride-sharing/shared/messaging"
+	"ride-sharing/shared/proto/driver"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
+var (
+	connManager = messaging.NewConnectionManager()
+)
 
-func handleRidersWebsocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
+	conn, err := connManager.Upgrade(w, r)
 	if err != nil {
-		log.Println("failed to upgrade websocket:", err)
+		log.Printf("WebSocket upgrade failed: %v", err)
 		return
 	}
 
@@ -26,27 +24,29 @@ func handleRidersWebsocket(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.URL.Query().Get("userID")
 	if userID == "" {
-		log.Println("userID is required")
+		log.Println("No user ID provided")
 		return
 	}
+
+	// Add connection to manager
+	connManager.Add(userID, conn)
+	defer connManager.Remove(userID)
 
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("failed to read message:", err)
+			log.Printf("Error reading message: %v", err)
 			break
 		}
 
-		log.Println("received message:", string(message))
-
+		log.Printf("Received message: %s", message)
 	}
-
 }
 
-func handleDriversWebsocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
+	conn, err := connManager.Upgrade(w, r)
 	if err != nil {
-		log.Println("failed to upgrade websocket:", err)
+		log.Printf("WebSocket upgrade failed: %v", err)
 		return
 	}
 
@@ -54,46 +54,76 @@ func handleDriversWebsocket(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.URL.Query().Get("userID")
 	if userID == "" {
-		log.Println("userID is required")
+		log.Println("No user ID provided")
 		return
 	}
 
 	packageSlug := r.URL.Query().Get("packageSlug")
 	if packageSlug == "" {
-		log.Println("packageSlug is required")
+		log.Println("No package slug provided")
 		return
 	}
 
-	type Driver struct {
-		Id             string `json:"id"`
-		Name           string `json:"name"`
-		ProfilePicture string `json:"profilePicture"`
-		Carplate       string `json:"carplate"`
-		PackageSlug    string `json:"packageSlug"`
+	// Add connection to manager
+	connManager.Add(userID, conn)
+
+	ctx := r.Context()
+
+	driverService, err := grpc_clients.NewDriverServiceClient()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	msg := contracts.WSMessage{
-		Type: "driver.cmd.register",
-		Data: Driver{
-			Id:             userID,
-			Name:           "HH",
-			ProfilePicture: util.GetRandomAvatar(1),
-			Carplate:       "TEST",
-			PackageSlug:    packageSlug,
-		},
+	// Closing connections
+	defer func() {
+		connManager.Remove(userID)
+
+		driverService.Client.UnRegisterDriver(ctx, &driver.RegisterDriverRequest{
+			DriverID:    userID,
+			PackageSlug: packageSlug,
+		})
+
+		driverService.Close()
+
+		log.Println("Driver unregistered: ", userID)
+	}()
+
+	driverData, err := driverService.Client.RegisterDriver(ctx, &driver.RegisterDriverRequest{
+		DriverID:    userID,
+		PackageSlug: packageSlug,
+	})
+	if err != nil {
+		log.Printf("Error registering driver: %v", err)
+		return
 	}
 
-	if err := conn.WriteJSON(msg); err != nil {
-		log.Println("failed to sending message:", err)
+	if err := connManager.SendMessage(userID, contracts.WSMessage{
+		Type: contracts.DriverCmdRegister,
+		Data: driverData.Driver,
+	}); err != nil {
+		log.Printf("Error sending message: %v", err)
+		return
+	}
+
+	queues := []string{
+		messaging.DriverCmdTripRequestQueue,
+	}
+
+	for _, queue := range queues {
+		consumer := messaging.NewQueueConsumer(rb, connManager, queue)
+		if err := consumer.Start(); err != nil {
+			log.Printf("Error starting consumer for queue %s: %v", queue, err)
+		}
+
 	}
 
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("failed to read message:", err)
+			log.Printf("Error reading message: %v", err)
 			break
 		}
 
-		log.Println("received message:", string(message))
+		log.Printf("Received message: %s", message)
 	}
 }
