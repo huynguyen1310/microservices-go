@@ -48,6 +48,9 @@ func main() {
 	driverConsumer := events.NewDriverConsumer(rabbitmq, svc)
 	go driverConsumer.Listen()
 
+	paymentConsumer := events.NewPaymentConsumer(rabbitmq, svc)
+	go paymentConsumer.Listen()
+
 	var GrpcAddr = ":9093"
 	lis, err := net.Listen("tcp", GrpcAddr)
 	if err != nil {
