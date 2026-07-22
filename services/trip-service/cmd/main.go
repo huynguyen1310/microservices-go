@@ -45,6 +45,9 @@ func main() {
 
 	publisher := events.NewTripPublisher(rabbitmq)
 
+	driverConsumer := events.NewDriverConsumer(rabbitmq, svc)
+	go driverConsumer.Listen()
+
 	var GrpcAddr = ":9093"
 	lis, err := net.Listen("tcp", GrpcAddr)
 	if err != nil {

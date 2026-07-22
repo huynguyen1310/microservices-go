@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"ride-sharing/services/api-gateway/grpc_clients"
@@ -31,6 +32,19 @@ func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging
 	// Add connection to manager
 	connManager.Add(userID, conn)
 	defer connManager.Remove(userID)
+
+	queues := []string{
+		messaging.NotifyDriverNoDriversFoundQueue,
+		messaging.NotifyDriverAssignQueue,
+	}
+
+	for _, queue := range queues {
+		consumer := messaging.NewQueueConsumer(rb, connManager, queue)
+		if err := consumer.Start(); err != nil {
+			log.Printf("Error starting consumer for queue %s: %v", queue, err)
+		}
+
+	}
 
 	for {
 		_, message, err := conn.ReadMessage()
@@ -124,6 +138,29 @@ func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messagin
 			break
 		}
 
-		log.Printf("Received message: %s", message)
+		type driverMessage struct {
+			Type string          `json:"type"`
+			Data json.RawMessage `json:"data"`
+		}
+
+		var driverMsg driverMessage
+		if err := json.Unmarshal(message, &driverMsg); err != nil {
+			log.Printf("Error unmarshaling message: %v", err)
+			continue
+		}
+
+		switch driverMsg.Type {
+		case contracts.DriverCmdLocation:
+			continue
+		case contracts.DriverCmdTripAccept, contracts.DriverCmdTripDecline:
+			if err := rb.PublishMessage(ctx, driverMsg.Type, contracts.AmqpMessage{
+				OwnerID: userID,
+				Data:    driverMsg.Data,
+			}); err != nil {
+				log.Printf("Error publishing message: %v", err)
+			}
+		default:
+			log.Printf("Unknown message type: %s", driverMsg.Type)
+		}
 	}
 }
