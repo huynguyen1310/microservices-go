@@ -17,6 +17,7 @@ import (
 
 	grpc "ride-sharing/services/trip-service/internal/grpc"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	grpcserver "google.golang.org/grpc"
 )
 
@@ -70,7 +71,10 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	grcpServer := grpcserver.NewServer()
+	grcpServer := grpcserver.NewServer(
+		grpcserver.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
+		grpcserver.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+	)
 	grpc.NewGRPCHandler(grcpServer, svc, publisher)
 
 	log.Printf("Starting gRPC server Trip services on port %s", lis.Addr().String())

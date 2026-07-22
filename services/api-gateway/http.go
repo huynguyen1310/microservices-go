@@ -15,10 +15,11 @@ import (
 
 	"github.com/stripe/stripe-go/v81"
 	"github.com/stripe/stripe-go/v81/webhook"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/status"
 )
 
-var tracer = tracing.GetTracer("api-gateway")
+var getTracer = func() trace.Tracer { return tracing.GetTracer("api-gateway") }
 
 type tripStartRequest struct {
 	RideFareID string `json:"rideFareID"`
@@ -26,7 +27,7 @@ type tripStartRequest struct {
 }
 
 func handleTripPreview(w http.ResponseWriter, r *http.Request) {
-	ctx, span := tracer.Start(r.Context(), "handleTripPreview")
+	ctx, span := getTracer().Start(r.Context(), "handleTripPreview")
 	defer span.End()
 
 	var reqBody previewTripRequest
@@ -62,7 +63,7 @@ func handleTripPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleTripStart(w http.ResponseWriter, r *http.Request) {
-	ctx, span := tracer.Start(r.Context(), "handleTripStart")
+	ctx, span := getTracer().Start(r.Context(), "handleTripStart")
 	defer span.End()
 
 	var reqBody tripStartRequest
@@ -107,7 +108,7 @@ func handleTripStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleStripeWebhook(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
-	ctx, span := tracer.Start(r.Context(), "handleStripeWebhook")
+	ctx, span := getTracer().Start(r.Context(), "handleStripeWebhook")
 	defer span.End()
 
 	body, err := io.ReadAll(r.Body)

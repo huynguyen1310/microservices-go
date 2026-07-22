@@ -11,6 +11,7 @@ import (
 	"ride-sharing/shared/tracing"
 	"syscall"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	grpcserver "google.golang.org/grpc"
 )
 
@@ -58,7 +59,10 @@ func main() {
 	log.Println("Starting RabbitMQ connection")
 
 	// Starting the gRPC server
-	grpcServer := grpcserver.NewServer()
+	grpcServer := grpcserver.NewServer(
+		grpcserver.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
+		grpcserver.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+	)
 	NewGrpcHandler(grpcServer, svc)
 
 	consumer := NewTripConsumer(rabbitmq, svc)

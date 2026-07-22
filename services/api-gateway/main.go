@@ -22,6 +22,18 @@ var (
 func main() {
 	log.Println("Starting API Gateway")
 
+	// Initialize Tracing
+	tracerCfg := tracing.Config{
+		ServiceName:    "api-gateway",
+		Environment:    env.GetString("ENVIRONMENT", "development"),
+		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "http://jaeger:14268/api/traces"),
+	}
+
+	sh, err := tracing.InitTracer(tracerCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize the tracer: %v", err)
+	}
+
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitmqURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
@@ -67,18 +79,6 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	// Initialize Tracing
-	tracerCfg := tracing.Config{
-		ServiceName:    "api-gateway",
-		Environment:    env.GetString("ENVIRONMENT", "development"),
-		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "http://jaeger:14268/api/traces"),
-	}
-
-	sh, err := tracing.InitTracer(tracerCfg)
-	if err != nil {
-		log.Fatalf("Failed to initialize the tracer: %v", err)
-	}
 
 	defer sh(ctx)
 
