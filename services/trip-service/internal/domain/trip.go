@@ -12,11 +12,11 @@ import (
 )
 
 type TripModel struct {
-	ID       bson.ObjectID
-	UserID   string
-	Status   string
-	RideFare *RideFareModel
-	Driver   *pb.TripDriver
+	ID       bson.ObjectID  `bson:"_id,omitempty"`
+	UserID   string         `bson:"userID"`
+	Status   string         `bson:"status"`
+	RideFare *RideFareModel `bson:"rideFare"`
+	Driver   *pb.TripDriver `bson:"driver"`
 }
 
 type TripRepository interface {
